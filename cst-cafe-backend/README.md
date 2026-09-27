@@ -60,6 +60,7 @@ Open http://localhost:5000/api/health in your browser — it should say `{"statu
 | `npm start` | Start the API |
 | `npm run db:setup` | **Reset** the database: rebuild tables + starting data (deletes everything else!) |
 | `npm run db:migrate` | **Update** an existing database to the latest version, keeping all data |
+| `npm run db:init` | Sets up an empty database, or updates an existing one — safe to run every start (used on Render) |
 | `npm test` | Run the automated tests for every endpoint (adds test data to the database) |
 
 ---
@@ -200,3 +201,20 @@ demoted or disabled.
 - Set `STAFF_SIGNUP_CODE` in `.env` so that only people who know the code can
   create staff accounts (the signup request must then include `signupCode`).
 - Use a long random `JWT_SECRET` and never share your `.env` file.
+
+---
+
+## Deploying on Render
+
+1. **Database**: New → Postgres (free). Copy its **Internal Database URL**.
+2. **Backend**: New → Web Service → this repo, **Root Directory** `cst-cafe-backend`
+   - Build command: `npm install`
+   - Start command: `npm run db:init && npm start`
+   - Environment: `DATABASE_URL` (internal URL), `JWT_SECRET` (long random text),
+     `CLIENT_ORIGIN` (the frontend's Render URL), `SEED_PASSWORD`, `STAFF_SIGNUP_CODE`
+3. **Frontend**: New → Web Service → this repo, **Root Directory** `cst-cafe-frontend`
+   - Build command: `npm install && npm run build` · Start command: `npm start`
+   - Environment: `NEXT_PUBLIC_API_URL` = the backend's Render URL + `/api`
+
+Free-plan limits: services sleep after 15 minutes idle (first visit takes
+~30–60 s), and the free database expires after 30 days.

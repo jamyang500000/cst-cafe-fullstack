@@ -9,6 +9,7 @@
     "start": "node src/index.js",
     "db:setup": "node db/setup.js",
     "db:migrate": "node db/migrate.js",
+    "db:init": "node db/init.js",
     "test": "node tests/api.test.js"
   },
   "dependencies": {

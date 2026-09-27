@@ -8,7 +8,9 @@ const path = require("path");
 const { Client } = require("pg");
 const bcrypt = require("bcryptjs");
 
-const DEMO_PASSWORD = "cstcafe123";
+// Password for the two demo accounts. On a public server set SEED_PASSWORD
+// in the environment so it isn't the well-known default.
+const DEMO_PASSWORD = process.env.SEED_PASSWORD || "cstcafe123";
 
 const menuItems = [
   ["Ema Datshi Rice Bowl", "Meals", 85, 12, true, "Chili cheese stew served over steamed rice.", "https://commons.wikimedia.org/wiki/Special:FilePath/Shakam_Datshi.jpg"],
@@ -40,7 +42,7 @@ async function ensureDatabaseExists(url) {
   const dbName = target.pathname.slice(1);
   const admin = new URL(url);
   admin.pathname = "/postgres";
-  const client = new Client({ connectionString: admin.toString() });
+  const client = new Client({ connectionString: admin.toString(), ssl: sslOption() });
   await client.connect();
   const { rowCount } = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
   if (rowCount === 0) {
@@ -51,18 +53,8 @@ async function ensureDatabaseExists(url) {
   await client.end();
 }
 
-async function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.error("Missing DATABASE_URL in .env - copy .env.example to .env first.");
-    process.exit(1);
-  }
-
-  await ensureDatabaseExists(url);
-
-  const client = new Client({ connectionString: url });
-  await client.connect();
-
+// Builds every table (wiping old ones) and adds the starting data.
+async function createSchemaAndSeed(client) {
   const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
   await client.query(schema);
   console.log("Tables created");
@@ -92,12 +84,37 @@ async function main() {
     [hash]
   );
 
-  await client.end();
   console.log("Seed data added");
-  console.log("\nDemo accounts (password for both: " + DEMO_PASSWORD + ")");
+  console.log(
+    "\nDemo accounts (password for both: " +
+      (process.env.SEED_PASSWORD ? "the SEED_PASSWORD you set" : DEMO_PASSWORD) + ")"
+  );
   console.log("  Staff (Manager): pema.choden@cstcafe.bt");
   console.log("  Customer:        karma.wangdi@rub.edu.bt");
 }
+
+async function main() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error("Missing DATABASE_URL in .env - copy .env.example to .env first.");
+    process.exit(1);
+  }
+  await ensureDatabaseExists(url);
+  const client = new Client({ connectionString: url, ssl: sslOption() });
+  await client.connect();
+  await createSchemaAndSeed(client);
+  await client.end();
+}
+
+// SSL is needed when connecting to a cloud database from outside its network.
+function sslOption() {
+  return process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined;
+}
+
+module.exports = { createSchemaAndSeed, sslOption };
+
+// Only run when called directly (npm run db:setup), not when imported.
+if (require.main !== module) return;
 
 main().catch((err) => {
   console.error("\nDatabase setup failed:", err.message);

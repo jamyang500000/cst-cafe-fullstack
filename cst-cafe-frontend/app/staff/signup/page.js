@@ -15,6 +15,7 @@ export default function StaffSignupPage() {
     role: roles[0],
     password: "",
     confirmPassword: "",
+    signupCode: "",
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -55,7 +56,13 @@ export default function StaffSignupPage() {
     setSubmitting(true);
     try {
       await signup(
-        { name: form.name, email: form.email, role: form.role, password: form.password },
+        {
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          password: form.password,
+          signupCode: form.signupCode.trim() || undefined,
+        },
         "staff"
       );
       router.push("/staff");
@@ -172,6 +179,23 @@ export default function StaffSignupPage() {
             {errors.confirmPassword && (
               <p className="mt-1 text-xs text-delayed">{errors.confirmPassword}</p>
             )}
+          </div>
+
+          <div>
+            <label htmlFor="signupCode" className="block text-sm font-medium text-foreground mb-1">
+              Staff code <span className="font-normal text-muted">(from your manager)</span>
+            </label>
+            <input
+              id="signupCode"
+              name="signupCode"
+              type="text"
+              value={form.signupCode}
+              onChange={handleChange}
+              autoComplete="off"
+              className="w-full rounded-lg border border-border bg-paper px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-pine/40"
+              placeholder="Only needed if the cafe uses one"
+            />
+            {errors.signupCode && <p className="mt-1 text-xs text-delayed">{errors.signupCode}</p>}
           </div>
 
           <button

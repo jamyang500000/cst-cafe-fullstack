@@ -5,7 +5,11 @@ const { databaseUrl } = require("./config");
 // so dates don't shift by a day because of time zones.
 types.setTypeParser(1082, (value) => value);
 
-const pool = new Pool({ connectionString: databaseUrl });
+const pool = new Pool({
+  connectionString: databaseUrl,
+  // Cloud databases reached from outside their network need SSL (DATABASE_SSL=true).
+  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+});
 
 // Run a single query: const { rows } = await query("SELECT ...", [values])
 function query(text, params) {

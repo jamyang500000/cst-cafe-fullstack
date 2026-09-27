@@ -19,20 +19,32 @@ const steps = [
   },
 ];
 
+// Runs every step on an open connection (used by init.js too).
+async function runMigrations(client) {
+  for (const step of steps) {
+    await client.query(step.sql);
+    console.log(`✓ ${step.name}`);
+  }
+}
+
+module.exports = { runMigrations };
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.error("Missing DATABASE_URL in .env");
     process.exit(1);
   }
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+  });
   await client.connect();
-  for (const step of steps) {
-    await client.query(step.sql);
-    console.log(`✓ ${step.name}`);
-  }
+  await runMigrations(client);
   await client.end();
   console.log("Database is up to date. Your data was kept.");
 }
+
+if (require.main !== module) return;
 
 main().catch((err) => {
   console.error("Migration failed:", err.message);
