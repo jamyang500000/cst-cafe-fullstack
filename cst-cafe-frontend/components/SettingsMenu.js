@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getStoredTheme, applyTheme } from "@/lib/theme";
+import { useAuth } from "@/lib/AuthContext";
 
 function GearIcon({ className }) {
   return (
@@ -24,6 +25,7 @@ function GearIcon({ className }) {
 
 export default function SettingsMenu({ logoutHref = "/" }) {
   const router = useRouter();
+  const { logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const containerRef = useRef(null);
@@ -49,7 +51,7 @@ export default function SettingsMenu({ logoutHref = "/" }) {
   }
 
   function handleLogout() {
-    // TODO: clear the real session/auth token here once a backend exists.
+    logout();
     setOpen(false);
     router.push(logoutHref);
   }
@@ -66,7 +68,7 @@ export default function SettingsMenu({ logoutHref = "/" }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-paper shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-paper shadow-lg z-50">
           <div className="px-4 py-3 border-b border-border">
             <span className="text-sm font-medium text-foreground">Settings</span>
           </div>
@@ -107,4 +109,4 @@ export default function SettingsMenu({ logoutHref = "/" }) {
       )}
     </div>
   );
-}
+}

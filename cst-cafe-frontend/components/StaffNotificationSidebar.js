@@ -1,57 +1,12 @@
 "use client";
 
-import { useState } from "react";
-
-// Mock data for now — swap this for a real fetch/subscription (or a
-// websocket push) once the backend can notify staff of new orders,
-// cancellations, and stock changes in real time.
-const initialNotifications = [
-  {
-    id: 1,
-    title: "New order",
-    message: "ORD-0144 placed for Table 2 — 3 items.",
-    time: "2m ago",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Order cancelled",
-    message: "ORD-0138 was cancelled by the customer.",
-    time: "8m ago",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "Order delayed",
-    message: "ORD-0143 (takeaway) is running behind schedule.",
-    time: "15m ago",
-    read: false,
-  },
-  {
-    id: 4,
-    title: "Item sold out",
-    message: "Cheese Sandwich was marked sold out.",
-    time: "1h ago",
-    read: true,
-  },
-];
+import { useNotifications } from "@/lib/useNotifications";
 
 export default function StaffNotificationSidebar() {
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }
-
-  function markOneRead(id) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  }
+  const { notifications, unreadCount, markOneRead, markAllRead } = useNotifications();
 
   return (
-    <aside className="w-72 shrink-0 border-l border-border bg-card px-5 py-8">
+    <aside className="shrink-0 border-t border-border bg-card px-4 py-6 sm:px-8 xl:w-72 xl:border-l xl:border-t-0 xl:px-5 xl:py-8">
       <div className="flex items-center justify-between">
         <div>
           <p className="font-display text-lg text-pine">Notifications</p>
@@ -70,7 +25,7 @@ export default function StaffNotificationSidebar() {
         )}
       </div>
 
-      <div className="mt-6 space-y-2">
+      <div className="mt-6 max-h-96 space-y-2 overflow-y-auto xl:max-h-[calc(100vh-12rem)]">
         {notifications.length === 0 ? (
           <p className="text-sm text-muted">Nothing new right now.</p>
         ) : (
@@ -99,4 +54,4 @@ export default function StaffNotificationSidebar() {
       </div>
     </aside>
   );
-}
+}

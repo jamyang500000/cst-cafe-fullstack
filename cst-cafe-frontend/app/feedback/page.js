@@ -2,25 +2,31 @@
 
 import { useState } from "react";
 import CustomerNav from "@/components/CustomerNav";
+import { api } from "@/lib/api";
 
 export default function FeedbackPage() {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (rating === 0) return;
-    // In a real app, this would call an API to save the feedback privately —
-    // it's never shown publicly, only visible to CST Cafe staff.
-    // e.g. await fetch("/api/feedback", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ rating, comment }),
-    // });
-    console.log("feedback submitted (placeholder):", { rating, comment });
-    setSubmitted(true);
+    // Saved anonymously - no name or account is attached, and only CST Cafe
+    // staff can read it.
+    setSubmitting(true);
+    setError("");
+    try {
+      await api("/feedback", { method: "POST", body: { rating, comment } });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function resetForm() {
@@ -96,12 +102,14 @@ export default function FeedbackPage() {
               className="mt-2 w-full rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:border-pine/60 focus:outline-none"
             />
 
+            {error && <p className="mt-4 text-sm text-delayed">{error}</p>}
+
             <button
               type="submit"
-              disabled={rating === 0}
+              disabled={rating === 0 || submitting}
               className="mt-5 w-full rounded-full bg-pine py-2.5 text-sm text-paper transition-colors hover:bg-pine/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Submit feedback
+              {submitting ? "Sending…" : "Submit feedback"}
             </button>
             {rating === 0 && (
               <p className="mt-2 text-center text-xs text-muted">
@@ -113,4 +121,4 @@ export default function FeedbackPage() {
       </main>
     </>
   );
-}
+}

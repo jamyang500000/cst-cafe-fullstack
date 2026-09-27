@@ -1,17 +1,78 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import CustomerNav from "@/components/CustomerNav";
 import CafeHeroScene from "../../components/CafeHeroScene";
-import { categories, menuItems } from "@/lib/mock-data";
-import { useOrder } from "@/lib/OrderContext";
+import { api } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
+
+// The cart is kept here while a visitor logs in, so it isn't lost.
+const CART_KEY = "cst-cafe-cart";
+
+function loadSavedCart() {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(CART_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCart(quantities) {
+  try {
+    window.sessionStorage.setItem(CART_KEY, JSON.stringify(quantities));
+  } catch {}
+}
 
 export default function MenuPage() {
   const router = useRouter();
-  const { confirmOrder } = useOrder();
+  const { user } = useAuth();
+  const [menuItems, setMenuItems] = useState([]);
+  const [categories, setCategories] = useState(["All"]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [quantities, setQuantities] = useState({});
+  const [cartLoaded, setCartLoaded] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [favourites, setFavourites] = useState([]);
+
+  function loadMenu() {
+    return api("/menu")
+      .then((data) => {
+        setMenuItems(data.items);
+        setCategories(data.categories);
+        setLoadError("");
+      })
+      .catch((err) => setLoadError(err.message))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadMenu();
+    setQuantities(loadSavedCart());
+    setCartLoaded(true);
+  }, []);
+
+  // "Your favourites" - only if the customer turned it on in Privacy settings.
+  useEffect(() => {
+    if (user?.accountType !== "customer") {
+      setFavourites([]);
+      return;
+    }
+    api("/menu/recommendations")
+      .then((data) => setFavourites(data.items))
+      .catch(() => setFavourites([]));
+  }, [user]);
+
+  // Save the cart whenever it changes - but only after the saved cart has
+  // been loaded, otherwise the empty starting cart would overwrite it.
+  useEffect(() => {
+    if (!cartLoaded) return;
+    saveCart(quantities);
+    setOrderError("");
+  }, [quantities, cartLoaded]);
 
   const visibleItems =
     activeCategory === "All"
@@ -37,21 +98,36 @@ export default function MenuPage() {
     });
   }
 
-  const totalCount = Object.values(quantities).reduce((sum, q) => sum + q, 0);
-  const subtotal = Object.entries(quantities).reduce((sum, [id, qty]) => {
-    const item = menuItems.find((m) => String(m.id) === id);
-    return sum + (item ? item.price * qty : 0);
-  }, 0);
+  // Only count items that are still on the menu and available.
+  const cartLines = Object.entries(quantities)
+    .map(([id, qty]) => ({ item: menuItems.find((m) => String(m.id) === id), qty }))
+    .filter(({ item, qty }) => item && item.available && qty > 0);
+  const totalCount = cartLines.reduce((sum, { qty }) => sum + qty, 0);
+  const subtotal = cartLines.reduce((sum, { item, qty }) => sum + item.price * qty, 0);
 
-  function handleConfirmOrder() {
-    const orderedItems = Object.entries(quantities)
-      .filter(([, qty]) => qty > 0)
-      .map(([id, qty]) => {
-        const item = menuItems.find((m) => String(m.id) === id);
-        return { id: item.id, name: item.name, price: item.price, qty };
+  async function handleConfirmOrder() {
+    if (!user) {
+      router.push("/login?next=/menu");
+      return;
+    }
+    if (user.accountType !== "customer") {
+      setOrderError("Staff accounts can't place orders. Log in with a customer account.");
+      return;
+    }
+    setPlacing(true);
+    try {
+      await api("/orders", {
+        method: "POST",
+        body: { items: cartLines.map(({ item, qty }) => ({ id: item.id, qty })) },
       });
-    confirmOrder(orderedItems);
-    router.push("/orders");
+      setQuantities({});
+      saveCart({});
+      router.push("/orders");
+    } catch (err) {
+      setOrderError(err.message);
+      loadMenu(); // something may have sold out
+      setPlacing(false);
+    }
   }
 
   return (
@@ -74,6 +150,38 @@ export default function MenuPage() {
           </div>
         </section>
 
+        {favourites.length > 0 && (
+          <section className="mb-8">
+            <h2 className="font-display text-xl text-pine">Your favourites</h2>
+            <p className="mt-0.5 text-sm text-muted">What you order most — add it in one tap.</p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {favourites.map((fav) => {
+                const qty = quantities[fav.id] || 0;
+                return (
+                  <div
+                    key={fav.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-amber/30 bg-amber/5 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{fav.name}</p>
+                      <p className="text-xs text-muted">
+                        Nu. {fav.price} · ordered {fav.timesOrdered}×
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => addItem(fav.id)}
+                      aria-label={`Add ${fav.name} from favourites`}
+                      className="shrink-0 rounded-full bg-amber px-3 py-1 text-xs text-paper hover:bg-amber-light"
+                    >
+                      {qty > 0 ? `Add (${qty})` : "Add"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <div className="mb-6 flex gap-2">
           {categories.map((cat) => (
             <button
@@ -90,6 +198,13 @@ export default function MenuPage() {
           ))}
         </div>
 
+        {loading && <p className="text-sm text-muted">Loading menu…</p>}
+        {loadError && (
+          <p className="rounded-lg border border-delayed/20 bg-delayed/10 px-3 py-2 text-sm text-delayed">
+            {loadError}
+          </p>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {visibleItems.map((item) => {
             const qty = quantities[item.id] || 0;
@@ -100,12 +215,18 @@ export default function MenuPage() {
                   !item.available ? "opacity-50" : ""
                 }`}
               >
-                <img
-                  src={item.image}
-                  alt={item.name}
-                  loading="lazy"
-                  className="h-40 w-full object-cover"
-                />
+                {item.image ? (
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    loading="lazy"
+                    className="h-40 w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-40 w-full items-center justify-center bg-amber/10 font-display text-3xl text-amber/60">
+                    {item.name.charAt(0)}
+                  </div>
+                )}
                 <div className="flex flex-1 flex-col justify-between p-5">
                   <div>
                     <div className="flex items-start justify-between gap-3">
@@ -162,6 +283,9 @@ export default function MenuPage() {
 
       {totalCount > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 px-6 py-4 backdrop-blur">
+          {orderError && (
+            <p className="mx-auto mb-2 w-full max-w-5xl text-sm text-delayed">{orderError}</p>
+          )}
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between">
             <p className="text-sm text-foreground">
               {totalCount} {totalCount === 1 ? "item" : "items"} ·{" "}
@@ -169,13 +293,14 @@ export default function MenuPage() {
             </p>
             <button
               onClick={handleConfirmOrder}
-              className="rounded-full bg-pine px-6 py-2 text-sm text-paper transition-colors hover:bg-pine/90"
+              disabled={placing}
+              className="rounded-full bg-pine px-6 py-2 text-sm text-paper transition-colors hover:bg-pine/90 disabled:opacity-60"
             >
-              Confirm order
+              {placing ? "Placing order…" : user ? "Confirm order" : "Log in to order"}
             </button>
           </div>
         </div>
       )}
     </>
   );
-}
+}

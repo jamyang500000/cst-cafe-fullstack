@@ -1,32 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-// Mock data for now — swap this for a real fetch/subscription once you have
-// a backend endpoint for notifications.
-const initialNotifications = [
-  {
-    id: 1,
-    title: "Order ready",
-    message: "Your Chicken Momo order is ready for pickup at the counter.",
-    time: "2m ago",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Booking confirmed",
-    message: "Your table for 2 is confirmed for 6:30 PM today.",
-    time: "1h ago",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "Welcome to CST Cafe",
-    message: "Thanks for signing up! Browse the menu to place your first order.",
-    time: "1d ago",
-    read: true,
-  },
-];
+import { useNotifications } from "@/lib/useNotifications";
 
 function BellIcon({ className }) {
   return (
@@ -46,11 +21,9 @@ function BellIcon({ className }) {
 }
 
 export default function NotificationBell() {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const { notifications, unreadCount, markOneRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   // close the dropdown when clicking anywhere outside it
   useEffect(() => {
@@ -62,16 +35,6 @@ export default function NotificationBell() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }
-
-  function markOneRead(id) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  }
 
   return (
     <div className="relative" ref={containerRef}>
@@ -90,7 +53,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-border bg-paper shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-paper shadow-lg z-50">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <span className="text-sm font-medium text-foreground">Notifications</span>
             {unreadCount > 0 && (
@@ -137,4 +100,4 @@ export default function NotificationBell() {
       )}
     </div>
   );
-}
+}

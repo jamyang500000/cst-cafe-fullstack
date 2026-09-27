@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth, nextPath } from "@/lib/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -37,17 +39,10 @@ export default function LoginPage() {
 
     setSubmitting(true);
     try {
-      // TODO: wire this up to your real login endpoint, e.g.:
-      // const res = await fetch("/api/auth/login", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(form),
-      // });
-      // if (!res.ok) throw new Error("Invalid email or password");
-      console.log("login submit (placeholder):", form);
-      router.push("/menu");
+      await login(form.email, form.password, "customer");
+      router.push(nextPath("/menu"));
     } catch (err) {
-      setErrors({ form: err.message || "Something went wrong. Try again." });
+      setErrors({ form: err.message || "Something went wrong. Try again.", ...err.details });
       setSubmitting(false);
     }
   }
@@ -121,4 +116,4 @@ export default function LoginPage() {
       </div>
     </main>
   );
-}
+}

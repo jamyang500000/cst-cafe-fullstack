@@ -1,28 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CustomerNav from "@/components/CustomerNav";
-import { mockCustomer } from "@/lib/mock-data";
+import ChangePasswordForm from "@/components/ChangePasswordForm";
+import { api, monthYear } from "@/lib/api";
+import { useRequireAuth } from "@/lib/AuthContext";
 
 export default function ProfilePage() {
-  const [form, setForm] = useState({
-    name: mockCustomer.name,
-    email: mockCustomer.email,
-    phone: mockCustomer.phone,
-  });
+  const { user, ready, setUser } = useRequireAuth("customer");
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  // Fill the form once we know who's logged in.
+  useEffect(() => {
+    if (user) setForm({ name: user.name, email: user.email, phone: user.phone || "" });
+  }, [user]);
 
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: undefined, form: undefined }));
     setSaved(false);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    // TODO: send this to a real "update profile" endpoint once the backend
-    // exists — for now it just confirms the change locally.
-    setSaved(true);
+    setSaving(true);
+    try {
+      const data = await api("/users/me", { method: "PATCH", body: form });
+      setUser(data.user);
+      setSaved(true);
+    } catch (err) {
+      setErrors({ form: err.message, ...err.details });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!ready) {
+    return (
+      <>
+        <CustomerNav />
+        <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
+          <p className="text-sm text-muted">Loading…</p>
+        </main>
+      </>
+    );
   }
 
   const initials = form.name
@@ -43,7 +68,7 @@ export default function ProfilePage() {
           </span>
           <div>
             <h1 className="font-display text-2xl text-pine">Your profile</h1>
-            <p className="text-sm text-muted">Member since {mockCustomer.memberSince}</p>
+            <p className="text-sm text-muted">Member since {monthYear(user.memberSince)}</p>
           </div>
         </div>
 
@@ -91,17 +116,21 @@ export default function ProfilePage() {
             />
           </div>
 
+          {errors.form && <p className="text-sm text-delayed">{errors.form}</p>}
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              className="rounded-full bg-pine px-5 py-2 text-sm text-paper hover:bg-pine/90 transition-colors"
+              disabled={saving}
+              className="rounded-full bg-pine px-5 py-2 text-sm text-paper hover:bg-pine/90 transition-colors disabled:opacity-60"
             >
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </button>
             {saved && <span className="text-sm text-ready">Saved</span>}
           </div>
         </form>
+
+        <ChangePasswordForm />
       </main>
     </>
   );
-}
+}

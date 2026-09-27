@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import CustomerNav from "@/components/CustomerNav";
-import { sampleOrder, statusStyles, TAKEAWAY_FEE } from "@/lib/mock-data";
-import { useOrder } from "@/lib/OrderContext";
+import { api } from "@/lib/api";
+import { useRequireAuth } from "@/lib/AuthContext";
+import { useLiveEvent } from "@/lib/LiveEvents";
+import { statusStyles, TAKEAWAY_FEE } from "@/lib/constants";
 
 const steps = ["waiting", "preparing", "ready"];
-const CANCEL_WINDOW_SECONDS = 180; // 3 minutes
+const BACKUP_REFRESH_MS = 30000; // live updates are instant; this is a backup
 
 function formatCountdown(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
@@ -16,53 +18,146 @@ function formatCountdown(totalSeconds) {
 }
 
 export default function OrdersPage() {
-  const { orderItems, orderType: confirmedOrderType, hasOrder } = useOrder();
-  // If the customer just confirmed an order on the menu page, show that —
-  // otherwise fall back to the static demo order.
-  const order = hasOrder
-    ? {
-        ...sampleOrder,
-        items: orderItems,
-        orderType: confirmedOrderType || sampleOrder.orderType,
-      }
-    : sampleOrder;
-  const currentStepIndex = steps.indexOf(order.status);
-  const status = statusStyles[order.status];
+  const { ready } = useRequireAuth("customer");
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const [items, setItems] = useState(order.items);
   const [confirmingPickup, setConfirmingPickup] = useState(false);
-  const [pickupConfirmed, setPickupConfirmed] = useState(false);
-  const [orderType, setOrderType] = useState(order.orderType || "dine-in");
+  const [orderType, setOrderType] = useState("dine-in");
   const [orderTypeConfirmed, setOrderTypeConfirmed] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(CANCEL_WINDOW_SECONDS);
+  const [secondsLeft, setSecondsLeft] = useState(0);
 
-  const isReady = order.status === "ready";
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const takeawayFee = orderType === "takeaway" ? TAKEAWAY_FEE : 0;
-  const finalTotal = subtotal + takeawayFee;
-  const canStillCancel = secondsLeft > 0;
+  // Show the server's copy of the order and sync the local UI to it.
+  const showOrder = useCallback((next, { resetType = false } = {}) => {
+    setOrder(next);
+    if (!next) return;
+    setSecondsLeft(next.cancelSecondsLeft || 0);
+    if (resetType) {
+      setOrderType(next.orderType);
+      setOrderTypeConfirmed(next.status !== "waiting");
+    }
+  }, []);
 
+  // Load the customer's most recent unfinished order.
   useEffect(() => {
-    if (cancelled || pickupConfirmed) return;
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [cancelled, pickupConfirmed]);
+    if (!ready) return;
+    api("/orders/mine?active=true")
+      .then((data) => showOrder(data.orders[0] || null, { resetType: true }))
+      .catch((err) => setActionError(err.message))
+      .finally(() => setLoading(false));
+  }, [ready, showOrder]);
 
-  function removeItem(id) {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+  const isActive = order && ["waiting", "preparing", "ready", "delayed"].includes(order.status);
+
+  const reloadOrder = useCallback(() => {
+    if (!order) return;
+    api(`/orders/${order.id}`)
+      .then((data) => showOrder(data.order))
+      .catch(() => {});
+  }, [order?.id, showOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Staff changed this order -> show it straight away.
+  useLiveEvent("order", (data) => {
+    if (order && data.id === order.id) reloadOrder();
+  });
+
+  // Backup check while the order is in progress.
+  useEffect(() => {
+    if (!isActive) return;
+    const interval = setInterval(reloadOrder, BACKUP_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [isActive, reloadOrder]);
+
+  // Cancel-window countdown
+  useEffect(() => {
+    if (!isActive || secondsLeft <= 0) return;
+    const timer = setTimeout(() => setSecondsLeft((prev) => Math.max(0, prev - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [isActive, secondsLeft]);
+
+  if (!ready || loading) {
+    return (
+      <>
+        <CustomerNav />
+        <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
+          <p className="text-sm text-muted">Loading your order…</p>
+        </main>
+      </>
+    );
   }
 
-  function handleConfirmPickup() {
-    setPickupConfirmed(true);
+  if (!order) {
+    return (
+      <>
+        <CustomerNav />
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+          <p className="text-sm uppercase tracking-wide text-muted">My order</p>
+          <h1 className="mt-2 font-display text-3xl text-pine">No active order</h1>
+          <p className="mt-3 max-w-sm text-sm text-muted">
+            {actionError || "Pick something from the menu and it'll show up here."}
+          </p>
+          <Link
+            href="/menu"
+            className="mt-8 rounded-full bg-amber px-5 py-2 text-sm text-paper hover:bg-amber-light"
+          >
+            Browse the menu
+          </Link>
+        </main>
+      </>
+    );
+  }
+
+  const items = order.items;
+  const canEdit = order.status === "waiting";
+  const currentStepIndex = steps.indexOf(order.status === "delayed" ? "preparing" : order.status);
+  const status = statusStyles[order.status];
+  const isReady = order.status === "ready";
+  const cancelled = order.status === "cancelled";
+  const pickupConfirmed = order.status === "picked_up";
+  const subtotal = order.subtotal;
+  const takeawayFee = orderType === "takeaway" ? TAKEAWAY_FEE : 0;
+  const finalTotal = subtotal + takeawayFee;
+  const canStillCancel = canEdit && secondsLeft > 0;
+
+  // Runs an API call, then shows the updated order (or the error).
+  async function update(path, method, body) {
+    setSaving(true);
+    setActionError("");
+    try {
+      const data = await api(path, { method, body });
+      showOrder(data.order);
+      return true;
+    } catch (err) {
+      setActionError(err.message);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmOrderType() {
+    if (orderType === order.orderType) {
+      setOrderTypeConfirmed(true);
+      return;
+    }
+    if (await update(`/orders/${order.id}`, "PATCH", { orderType })) setOrderTypeConfirmed(true);
+  }
+
+  function removeItem(id) {
+    const remaining = items.filter((item) => item.id !== id).map(({ id, qty }) => ({ id, qty }));
+    update(`/orders/${order.id}`, "PATCH", { items: remaining });
+  }
+
+  async function handleConfirmPickup() {
+    await update(`/orders/${order.id}/pickup`, "POST");
     setConfirmingPickup(false);
   }
 
-  function handleCancelOrder() {
-    setCancelled(true);
+  async function handleCancelOrder() {
+    await update(`/orders/${order.id}/cancel`, "POST");
     setCancelling(false);
   }
 
@@ -75,7 +170,7 @@ export default function OrdersPage() {
             Order cancelled
           </p>
           <h1 className="mt-2 font-display text-3xl text-pine">
-            Order {order.id} has been cancelled
+            Order {order.code} has been cancelled
           </h1>
           <p className="mt-3 max-w-sm text-sm text-muted">
             No worries — you can place a new order any time from the menu.
@@ -97,7 +192,7 @@ export default function OrdersPage() {
         <CustomerNav />
         <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-6 py-16 text-center">
           <p className="text-sm uppercase tracking-wide text-amber">
-            Order {order.id}
+            Order {order.code}
           </p>
           <h1 className="mt-2 font-display text-3xl text-pine">
             Enjoy your meal!
@@ -153,7 +248,7 @@ export default function OrdersPage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm uppercase tracking-wide text-amber">
-              Order {order.id}
+              Order {order.code}
             </p>
             <h1 className="mt-1 font-display text-3xl text-pine">
               Queue number {order.queueNumber}
@@ -171,8 +266,16 @@ export default function OrdersPage() {
             ? "Your order is slightly delayed. We'll notify you the moment it's ready."
             : isReady
             ? "Your order is ready for pickup!"
-            : `${order.aheadInQueue} orders ahead of you.`}
+            : order.aheadInQueue === 0
+            ? "You're next in the queue."
+            : `${order.aheadInQueue} ${order.aheadInQueue === 1 ? "order" : "orders"} ahead of you.`}
         </p>
+
+        {actionError && (
+          <p className="mt-4 rounded-lg border border-delayed/20 bg-delayed/10 px-3 py-2 text-sm text-delayed">
+            {actionError}
+          </p>
+        )}
 
         <div className="mt-10 flex items-center">
           {steps.map((step, i) => (
@@ -239,17 +342,20 @@ export default function OrdersPage() {
                     : "Dine in"}
                 </span>
               </p>
-              <button
-                onClick={() => setOrderTypeConfirmed(false)}
-                className="text-xs text-pine hover:underline"
-              >
-                Change
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => setOrderTypeConfirmed(false)}
+                  className="text-xs text-pine hover:underline"
+                >
+                  Change
+                </button>
+              )}
             </div>
           ) : (
             <button
-              onClick={() => setOrderTypeConfirmed(true)}
-              className="mt-3 w-full rounded-full bg-pine py-2 text-sm text-paper transition-colors hover:bg-pine/90"
+              onClick={confirmOrderType}
+              disabled={saving}
+              className="mt-3 w-full rounded-full bg-pine py-2 text-sm text-paper transition-colors hover:bg-pine/90 disabled:opacity-60"
             >
               Confirm {orderType === "takeaway" ? "takeaway" : "dine in"}
             </button>
@@ -265,7 +371,7 @@ export default function OrdersPage() {
           </div>
           <div className="mt-2 flex justify-between text-sm text-muted">
             <span>Pickup time</span>
-            <span className="text-foreground">{order.time}</span>
+            <span className="text-foreground">{order.time || "As soon as it's ready"}</span>
           </div>
           <div className="my-4 border-t border-border" />
           {items.length === 0 ? (
@@ -279,12 +385,15 @@ export default function OrdersPage() {
                   </span>
                   <div className="flex items-center gap-3">
                     <span className="text-muted">Nu. {item.price * item.qty}</span>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="text-xs text-delayed hover:underline"
-                    >
-                      Remove
-                    </button>
+                    {canEdit && items.length > 1 && (
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        disabled={saving}
+                        className="text-xs text-delayed hover:underline disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -327,7 +436,7 @@ export default function OrdersPage() {
                   Confirm you&apos;ve received your order?
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  This marks order {order.id} as picked up and completes your
+                  This marks order {order.code} as picked up and completes your
                   queue slot.
                 </p>
                 <div className="mt-4 flex gap-3">
@@ -372,7 +481,9 @@ export default function OrdersPage() {
             </>
           ) : (
             <p className="text-sm text-muted">
-              The cancellation window for this order has closed.
+              {canEdit
+                ? "The cancellation window for this order has closed."
+                : "This order is already being prepared, so it can no longer be cancelled."}
             </p>
           )}
         </div>
@@ -383,7 +494,7 @@ export default function OrdersPage() {
               Cancel this order?
             </p>
             <p className="mt-1 text-sm text-red-600/80">
-              Order {order.id} ({items.length}{" "}
+              Order {order.code} ({items.length}{" "}
               {items.length === 1 ? "item" : "items"}, Nu. {finalTotal}) will
               be cancelled. This can&apos;t be undone.
             </p>
@@ -406,4 +517,4 @@ export default function OrdersPage() {
       </main>
     </>
   );
-}
+}

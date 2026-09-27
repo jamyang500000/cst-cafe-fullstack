@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth, nextPath } from "@/lib/AuthContext";
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -37,17 +39,10 @@ export default function StaffLoginPage() {
 
     setSubmitting(true);
     try {
-      // TODO: wire this up to your real staff login endpoint, e.g.:
-      // const res = await fetch("/api/staff/login", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(form),
-      // });
-      // if (!res.ok) throw new Error("Invalid email or password");
-      console.log("staff login submit (placeholder):", form);
-      router.push("/staff");
+      await login(form.email, form.password, "staff");
+      router.push(nextPath("/staff"));
     } catch (err) {
-      setErrors({ form: err.message || "Something went wrong. Try again." });
+      setErrors({ form: err.message || "Something went wrong. Try again.", ...err.details });
       setSubmitting(false);
     }
   }
@@ -129,4 +124,4 @@ export default function StaffLoginPage() {
       </div>
     </main>
   );
-}
+}

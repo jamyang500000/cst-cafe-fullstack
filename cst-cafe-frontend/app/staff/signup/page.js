@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-const roles = ["Barista", "Cashier", "Kitchen", "Manager"];
+import { useAuth } from "@/lib/AuthContext";
+import { staffRoles as roles } from "@/lib/constants";
 
 export default function StaffSignupPage() {
   const router = useRouter();
+  const { signup } = useAuth();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -53,22 +54,13 @@ export default function StaffSignupPage() {
 
     setSubmitting(true);
     try {
-      // TODO: wire this up to your real staff signup endpoint, e.g.:
-      // const res = await fetch("/api/staff/signup", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({
-      //     name: form.name,
-      //     email: form.email,
-      //     role: form.role,
-      //     password: form.password,
-      //   }),
-      // });
-      // if (!res.ok) throw new Error("Could not create account");
-      console.log("staff signup submit (placeholder):", form);
-      router.push("/staff/login");
+      await signup(
+        { name: form.name, email: form.email, role: form.role, password: form.password },
+        "staff"
+      );
+      router.push("/staff");
     } catch (err) {
-      setErrors({ form: err.message || "Something went wrong. Try again." });
+      setErrors({ form: err.message || "Something went wrong. Try again.", ...err.details });
       setSubmitting(false);
     }
   }
@@ -205,4 +197,4 @@ export default function StaffSignupPage() {
       </div>
     </main>
   );
-}
+}

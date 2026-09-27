@@ -1,6 +1,7 @@
 import "./globals.css";
 import CafeBackgroundArt from "../components/CafeBackgroundArt";
-import { OrderProvider } from "@/lib/OrderContext";
+import { AuthProvider } from "@/lib/AuthContext";
+import { LiveEventsProvider } from "@/lib/LiveEvents";
 
 export const metadata = {
   title: "CST Cafe",
@@ -45,8 +46,10 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <CafeBackgroundArt />
-        <OrderProvider>{children}</OrderProvider>
+        <AuthProvider>
+          <LiveEventsProvider>{children}</LiveEventsProvider>
+        </AuthProvider>
       </body>
     </html>
   );
-}
+}

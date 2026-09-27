@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-function getInitials(name) {
+function getInitials(name = "") {
   return name
     .split(" ")
     .filter(Boolean)
@@ -40,7 +40,7 @@ export default function ProfileMenu({ user, profileHref = "/profile" }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-border bg-paper shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-paper shadow-lg z-50">
           <div className="px-4 py-4 border-b border-border">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-pine text-sm font-medium text-paper">
@@ -65,4 +65,4 @@ export default function ProfileMenu({ user, profileHref = "/profile" }) {
       )}
     </div>
   );
-}
+}
