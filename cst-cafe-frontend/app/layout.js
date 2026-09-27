@@ -2,10 +2,20 @@ import "./globals.css";
 import CafeBackgroundArt from "../components/CafeBackgroundArt";
 import { AuthProvider } from "@/lib/AuthContext";
 import { LiveEventsProvider } from "@/lib/LiveEvents";
+import PwaSetup from "@/components/PwaSetup";
 
 export const metadata = {
   title: "CST Cafe",
   description: "Book a table, pre-order your meal, and skip the queue at CST Cafe.",
+  applicationName: "CST Cafe",
+  // iPhone: "Add to Home Screen" opens full-screen with this name and icon
+  appleWebApp: { capable: true, title: "CST Cafe", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+// Colour of the phone's status bar / browser toolbar
+export const viewport = {
+  themeColor: "#4a2a1a",
 };
 
 export default function RootLayout({ children }) {
@@ -46,6 +56,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <CafeBackgroundArt />
+        <PwaSetup />
         <AuthProvider>
           <LiveEventsProvider>{children}</LiveEventsProvider>
         </AuthProvider>

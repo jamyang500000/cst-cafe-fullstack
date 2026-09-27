@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import CafeHeroScene from "../components/CafeHeroScene";
+import InstallAppButton from "@/components/InstallAppButton";
 
 export default function HomePage() {
   return (
@@ -42,6 +43,8 @@ export default function HomePage() {
           >
             Just browsing? View the menu
           </Link>
+
+          <InstallAppButton className="mt-6 rounded-full border border-amber/50 px-5 py-2 text-sm text-amber hover:bg-amber/10 transition-colors" />
 
           <Link
             href="/staff/login"
@@ -114,4 +117,4 @@ export default function HomePage() {
       </section>
     </main>
   );
-}
+}

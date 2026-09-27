@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getStoredTheme, applyTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/AuthContext";
+import { usePwaInstall } from "@/lib/usePwaInstall";
 
 function GearIcon({ className }) {
   return (
@@ -26,6 +27,7 @@ function GearIcon({ className }) {
 export default function SettingsMenu({ logoutHref = "/" }) {
   const router = useRouter();
   const { logout } = useAuth();
+  const { canInstall, install } = usePwaInstall();
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const containerRef = useRef(null);
@@ -89,6 +91,19 @@ export default function SettingsMenu({ logoutHref = "/" }) {
               <span className="h-5 w-5 rounded-full bg-white shadow" />
             </button>
           </div>
+
+          {canInstall && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                install();
+              }}
+              className="w-full px-4 py-3 border-b border-border text-left text-sm text-foreground hover:bg-card transition-colors"
+            >
+              Install app
+            </button>
+          )}
 
           <Link
             href="/setting/privacy"
