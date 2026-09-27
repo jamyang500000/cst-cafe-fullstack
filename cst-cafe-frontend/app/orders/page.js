@@ -38,6 +38,11 @@ export default function OrdersPage() {
     if (resetType) {
       setOrderType(next.orderType);
       setOrderTypeConfirmed(next.status !== "waiting");
+    } else if (next.status !== "waiting") {
+      // Staff have started on it: lock in the dine-in / takeaway choice.
+      setOrderType(next.orderType);
+      setOrderTypeConfirmed(true);
+      setCancelling(false);
     }
   }, []);
 
@@ -266,6 +271,8 @@ export default function OrdersPage() {
             ? "Your order is slightly delayed. We'll notify you the moment it's ready."
             : isReady
             ? "Your order is ready for pickup!"
+            : order.status === "preparing"
+            ? "Your order is being prepared."
             : order.aheadInQueue === 0
             ? "You're next in the queue."
             : `${order.aheadInQueue} ${order.aheadInQueue === 1 ? "order" : "orders"} ahead of you.`}
